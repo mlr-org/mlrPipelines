@@ -19,7 +19,7 @@ Returns a single \code{\link[mlr3:PredictionClassif]{PredictionClassif}}.
 This PipeOp should be used in conjunction with \code{\link{PipeOpLearnerCV}} in order to
 optimize thresholds of cross-validated predictions.
 In order to optimize thresholds without cross-validation, use \code{\link{PipeOpLearnerCV}}
-in conjunction with \code{\link[mlr3:mlr_resamplings_insample]{ResamplingInsample}}.
+in conjunction with \code{\link[mlr3:ResamplingInsample]{ResamplingInsample}}.
 }
 \section{Construction}{
 \preformatted{* `PipeOpTuneThreshold$new(id = "tunethreshold", param_vals = list())` \\cr
@@ -58,7 +58,7 @@ Initialized to \code{"classif.ce"}, i.e. misclassification error.
 \item \code{optimizer} :: \code{\link[bbotk:Optimizer]{Optimizer}}|\code{character(1)}\cr
 \code{\link[bbotk:Optimizer]{Optimizer}} used to find optimal thresholds.
 If \code{character}, converts to \code{\link[bbotk:Optimizer]{Optimizer}}
-via \code{\link[bbotk:opt]{opt}}. Initialized to \code{\link[bbotk:mlr_optimizers_gensa]{OptimizerGenSA}}.
+via \code{\link[bbotk:opt]{opt}}. Initialized to \code{\link[bbotk:OptimizerGenSA]{OptimizerGenSA}}.
 \item \code{log_level} :: \code{character(1)}|\code{integer(1)}\cr
 Set a temporary log-level for \code{lgr::get_logger("bbotk")}. Initialized to: "warn".
 }

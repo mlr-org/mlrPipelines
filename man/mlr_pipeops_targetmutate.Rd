@@ -44,7 +44,7 @@ The parameters are the parameters inherited from \code{\link{PipeOpTargetTrafo}}
 Transformation function for the target. Should only be a function of the target, i.e., taking a
 single \code{data.table} argument, typically with one column. The return value is used as the new
 target of the resulting \code{\link[mlr3:Task]{Task}}. To change target names, change the column name of the data
-using e.g. \code{\link[data.table:setattr]{setnames()}}.\cr
+using e.g. \code{\link[data.table:setnames]{setnames()}}.\cr
 Note that this function also gets called during prediction and should thus gracefully handle
 \code{NA} values.\cr
 Initialized to \code{identity()}.
