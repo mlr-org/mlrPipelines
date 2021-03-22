@@ -82,7 +82,8 @@ Suggests:
     methods,
     vtreat
 Remotes:
-    Bioconductor/Biobase
+    Bioconductor/Biobase,
+    mlr-org/paradox@param-init-delay
 ByteCompile: true
 Encoding: UTF-8
 Config/testthat/edition: 3
