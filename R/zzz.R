@@ -36,6 +36,6 @@ register_mlr3 = function() {
 } # nocov end
 
 # static code checks should not complain about commonly used data.table columns
-utils::globalVariables(c("src_id", "dst_id", "name", "op.id", "response", "truth"))
+utils::globalVariables(c("src_id", "dst_id", "src_channel", "dst_channel", "name", "op.id", "response", "truth"))
 
 leanify_package()

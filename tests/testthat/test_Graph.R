@@ -4,9 +4,9 @@ test_that("linear graph", {
   g = Graph$new()
   expect_equal(g$ids(sorted = TRUE), character(0))
 
-  # FIXME: we should  "dummy" ops, so we can change properties of the ops at will
+  # FIXME: we should use "dummy" ops, so we can change properties of the ops at will
   # we should NOT use PipeOpNOP, because we want to check that $train/$predict actually does something.
-  # FIXME: we should packages of the graph
+  # FIXME: we should check packages of the graph
   op_ds = PipeOpSubsample$new()
   op_pca = PipeOpPCA$new()
   op_lrn = PipeOpLearner$new(mlr_learners$get("classif.rpart"))
@@ -425,4 +425,80 @@ test_that("dot output", {
     "pca_output\",fontsize=24];",
     "6 [label=\"OUTPUT",
     "nop_output\",fontsize=24]"), out[-c(1L, 15L)])
+})
+
+
+
+test_that("replace_subgraph", {
+  task = tsk("iris")
+
+  # Basics
+  gr = Graph$new()$add_pipeop(PipeOpDebugMulti$new(2, 2))
+  address_old = address(gr)
+  gr_old = gr$clone(deep = TRUE)
+  expect_error(gr$replace_subgraph("id_not_present", PipeOpDebugMulti$new(2, 2)),
+    regexp = "Assertion on 'ids' failed")
+  expect_error(gr$replace_subgraph("debug.multi", NULL),
+    regexp = "op can not be converted to PipeOp")
+  expect_equal(gr, gr_old)  # error results in a clean reset
+  expect_true(address_old == address(gr))
+  expect_deep_clone(gr_old, gr)
+
+  gr$replace_subgraph("debug.multi", substitute = PipeOpDebugMulti$new(2, 2))
+  expect_equal(gr_old, gr)
+  expect_true(address_old == address(gr))  # in place modification
+  expect_deep_clone(gr_old, gr)  # replacing with exactly the same pipeop is the same as a deep clone
+
+  # Linear Graph
+  gr = po("scale") %>>% po("pca") %>>% lrn("classif.rpart")
+  gr_old = gr$clone(deep = TRUE)
+  gr$replace_subgraph("scale", substitute = po("scalemaxabs"))  # replace beginning
+  expect_set_equal(gr$ids(), c("scalemaxabs", "pca", "classif.rpart"))
+  expect_true(gr$input$op.id == "scalemaxabs")
+  expect_true(gr$output$op.id == "classif.rpart")
+  expect_null(gr$train(task)[[1L]])
+  expect_prediction_classif(gr$predict(task)[[1L]])
+
+  gr = gr_old$clone(deep = TRUE)
+  gr$replace_subgraph("classif.rpart", substitute = lrn("classif.featureless"))  # replace end
+  expect_set_equal(gr$ids(), c("scale", "pca", "classif.featureless"))
+  expect_true(gr$input$op.id == "scale")
+  expect_true(gr$output$op.id == "classif.featureless")
+  expect_null(gr$train(task)[[1L]])
+  expect_prediction_classif(gr$predict(task)[[1L]])
+
+  gr = gr_old$clone(deep = TRUE)
+  gr$replace_subgraph(c("scale", "pca", "classif.rpart"), substitute = po("scalemaxabs") %>>% po("ica") %>>% lrn("classif.featureless"))  # replace whole graph
+  expect_set_equal(gr$ids(), c("scalemaxabs", "ica", "classif.featureless"))
+  expect_true(gr$input$op.id == "scalemaxabs")
+  expect_true(gr$output$op.id == "classif.featureless")
+  expect_null(gr$train(task)[[1L]])
+  expect_prediction_classif(gr$predict(task)[[1L]])
+
+  gr = gr_old$clone(deep = TRUE)
+  gr$replace_subgraph(c("pca", "scale"), substitute = po("scalemaxabs") %>>% po("ica"))  # replace linear subgraph
+  expect_set_equal(gr$ids(), c("scalemaxabs", "ica", "classif.rpart"))
+  expect_true(gr$input$op.id == "scalemaxabs")
+  expect_true(gr$output$op.id == "classif.rpart")
+  expect_null(gr$train(task)[[1L]])
+  expect_prediction_classif(gr$predict(task)[[1L]])
+
+  # Non linear Graph
+  gr = po("scale") %>>% po("branch", c("pca", "nop")) %>>% gunion(list(po("pca"), po("nop"))) %>>% po("unbranch") %>>% lrn("classif.rpart")
+  gr_old = gr$clone(deep = TRUE)
+  #expect_error(gr$replace_subgraph(c("nop"), substitute = po("ica")), regexp = "connected to a vararg channel is not supported")  # FIXME:
+  expect_error(gr$replace_subgraph(c("branch", "pca", "nop", "unbranch"), substitute = lrn("classif.featureless")),
+    regexp = "Output type of PipeOp classif.featureless during training")
+  gr$replace_subgraph(c("branch", "pca", "nop", "unbranch"), substitute = po("branch", c("pca", "ica")) %>>% gunion(list(po("pca"), po("ica"))) %>>% po("unbranch"))
+  expect_set_equal(gr$ids(TRUE), c("scale", "branch", "pca", "ica", "unbranch", "classif.rpart"))
+  expect_true(gr$input$op.id == "scale")
+  expect_true(gr$output$op.id == "classif.rpart")
+  expect_null(gr$train(task)[[1L]])
+  state1 = gr$state
+  gr$param_set$values$branch.selection = "ica"
+  expect_null(gr$train(task)[[1L]])
+  state2 = gr$state
+  expect_true(test_r6(state1$ica, classes = "NO_OP"))
+  expect_true(test_r6(state2$pca, classes = "NO_OP"))
+  expect_prediction_classif(gr$predict(task)[[1L]])
 })
