@@ -177,7 +177,10 @@ PipeOpImputeLearner = R6Class("PipeOpImputeLearner",
   )
 )
 
-mlr_pipeops$add("imputelearner", PipeOpImputeLearner, list(R6Class("Learner", public = list(id = "learner", task_type = "classif", param_set = ParamSet$new()))$new()))
+mlr_pipeops$add("imputelearner", PipeOpImputeLearner,
+  list(R6Class("Learner",
+    public = list(id = "learner", task_type = "classif", param_set = ParamSet$new()),
+    active = list(encapsulate = function() c(train = "none", predict = "none")))$new()))
 
 # See mlr-org/mlr#470
 convert_to_task = function(id = "imputing", data, target, task_type, ...) {

@@ -58,8 +58,8 @@ Sets the \verb{$output} slot of the resulting object; see description there.
 Set of all required packages for the \code{\link{PipeOp}}'s \verb{$train} and \verb{$predict} methods. See \verb{$packages} slot.
 Default is \code{character(0)}.
 \item \code{tags} ::\code{character}\cr
-A set of tags associated with the \code{PipeOp}. Tags describe a PipeOp's purpose.
-Can be used to filter \code{as.data.table(mlr_pipeops)}. Default is \code{"abstract"}, indicating an abstract \code{PipeOp}.
+A set of tags associated with the \code{\link{PipeOp}}. Tags describe a \code{\link{PipeOp}}'s purpose.
+Can be used to filter \code{as.data.table(mlr_pipeops)}. Default is \code{"abstract"}, indicating an abstract \code{\link{PipeOp}}.
 }
 }
 
@@ -116,14 +116,29 @@ Number of input channels. This equals \verb{nrow($input)}.
 Number of output channels. This equals \verb{nrow($output)}.
 \item \code{is_trained} :: \code{logical(1)} \cr
 Indicate whether the \code{\link{PipeOp}} was already trained and can therefore be used for prediction.
-\item \code{tags} ::\code{character}\cr
-A set of tags associated with the \code{PipeOp}. Tags describe a PipeOp's purpose.
+\item \code{tags} :: \code{character}\cr
+A set of tags associated with the \code{\link{PipeOp}}. Tags describe a \code{\link{PipeOp}}'s purpose.
 Can be used to filter \code{as.data.table(mlr_pipeops)}.
-PipeOp tags are inherited and child classes can introduce additional tags.
+\code{\link{PipeOp}} tags are inherited and child classes can introduce additional tags.
 \item \code{hash} :: \code{character(1)} \cr
 Checksum calculated on the \code{\link{PipeOp}}, depending on the \code{\link{PipeOp}}'s \code{class} and the slots \verb{$id} and \verb{$param_set$values}. If a
 \code{\link{PipeOp}}'s functionality may change depending on more than these values, it should inherit the \verb{$hash} active
 binding and calculate the hash as \verb{digest(list(super$hash, <OTHER THINGS>), algo = "xxhash64")}.
+\item \code{timings} :: \code{numeric(2)} \cr
+Elapsed time in seconds for the steps \code{"train"} and \code{"predict"}.
+Measured via \code{\link[mlr3misc:encapsulate]{mlr3misc::encapsulate()}}.
+\item \code{log} :: \code{\link{data.table}}\cr
+Returns the output (including warning and errors) as table with columns \code{"stage"} ("train" or "predict"),
+\code{"class"} ("output", "warning", or "error"), and \code{"msg"} (\code{character()}).
+\item \code{warnings} :: \code{character()}\cr
+Logged warnings as vector.
+\item \code{errors} :: \code{character()}\cr
+Logged errors as vector.
+\item \code{encapsulate} :: named \code{character()}\cr
+Controls how to execute the code in internal train and predict methods.
+Must be a named character vector with names \code{"train"} and \code{"predict"}.
+Possible values are \code{"none"}, \code{"evaluate"} (requires package \CRANpkg{evaluate}) and \code{"callr"} (requires package \CRANpkg{callr}).
+See \code{\link[mlr3misc:encapsulate]{mlr3misc::encapsulate()}} for more details.
 \item \code{.result} :: \code{list} \cr
 If the \code{\link{Graph}}'s \verb{$keep_results} flag is set to \code{TRUE}, then the intermediate Results of \verb{$train()} and \verb{$predict()}
 are saved to this slot, exactly as they are returned by these functions. This is mainly for debugging purposes
@@ -136,7 +151,7 @@ and done, if requested, by the \code{\link{Graph}} backend itself; it should \em
 \itemize{
 \item \code{train(input)}\cr
 (\code{list}) -> named \code{list}\cr
-Train \code{\link{PipeOp}} on \code{inputs}, transform it to output and store the learned \verb{$state}. If the PipeOp is already
+Train \code{\link{PipeOp}} on \code{inputs}, transform it to output and store the learned \verb{$state}. If the \code{\link{PipeOp}} is already
 trained, already present \verb{$state} is overwritten. Input list is typechecked against the \verb{$input} \code{train} column.
 Return value is a list with as many entries as \verb{$output} has
 rows, with each entry named after the \verb{$output} \code{name} column and class according to the \verb{$output} \code{train} column.
@@ -189,11 +204,11 @@ PipeOpSumLetter = R6::R6Class("sumletter",
     # a list as output.
     .train = function(input) {
       sum = input[[1]] + input[[2]]
-      self$state = sum
+      self$state$sum = sum
       list(sum)
     },
     .predict = function(input) {
-      list(letters[self$state])
+      list(letters[self$state$sum])
     }
   )
 )

@@ -13,10 +13,18 @@ test_that("PipeOp - General functions", {
   expect_equal(po_1$packages, character(0))
   expect_null(po_1$state)
   assert_subset(po_1$tags, mlr_reflections$pipeops$valid_tags)
+  expect_equal(po_1$timings, c(train = NA_real_, predict = NA_real_))
 
   expect_output(expect_equal(po_1$train(list(1)), list(output = 1)), "Training debug.basic")
-  expect_equal(po_1$state, list(input = 1))
+  expect_equal(po_1$state$input, 1)
+  expect_setequal(names(po_1$state), c("input", "log", "train_time"))
   expect_true(po_1$is_trained)
+  expect_equal(names(po_1$timings), c("train", "predict"))
+  expect_true(which(is.na(po_1$timings)) == 2L)
+
+  expect_output(expect_equal(po_1$predict(list(1)), list(output = 1)), "Predicting debug.basic")
+  expect_equal(names(po_1$timings), c("train", "predict"))
+  expect_true(sum(is.na(po_1$timings)) == 0L)
   expect_error(po_1$train(tsk("iris")), regexp = "Must be of type 'list'")
 })
 

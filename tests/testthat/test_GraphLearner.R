@@ -34,19 +34,40 @@ test_that("basic graphlearner tests", {
 
   gr2 = PipeOpScale$new() %>>% PipeOpLearner$new(lrn)
   glrn2 = GraphLearner$new(gr2)
+  glrn2$graph$set_names(c("scale", "classif.rpart"), new = c("newscale", "newclassif.rpart"))
+  expect_list(glrn2$timings_pipeops, len = 2L)
+  expect_equal(names(glrn2$timings_pipeops), c("train", "predict"))
+  expect_equal(names(glrn2$timings_pipeops$train), glrn2$graph$ids(TRUE))
+  expect_equal(names(glrn2$timings_pipeops$train), names(glrn2$timings_pipeops$predict))
+  expect_true(every(glrn2$timings_pipeops, function(phase) every(phase, is.na)))
   glrn2_clone = glrn2$clone(deep = TRUE)
   expect_learner(glrn2)
   expect_true(run_experiment(task, glrn)$ok)
   glrn2$train(task)
+  expect_list(glrn2$timings_pipeops, len = 2L)
+  expect_equal(names(glrn2$timings_pipeops), c("train", "predict"))
+  expect_equal(names(glrn2$timings_pipeops$train), names(glrn2$timings_pipeops$predict))
+  expect_true(every(is.na(glrn2$timings_pipeops$train), isFALSE))
+  expect_true(every(is.na(glrn2$timings_pipeops$predict), isTRUE))
   glrn2_clone$state = glrn2$state
-#  glrn2_clone$state$log = glrn2_clone$state$log$clone(deep = TRUE)  # FIXME: this can go when mlr-org/mlr3#343 is fixed
-#  glrn2_clone$state$model$classif.rpart$log = glrn2_clone$state$model$classif.rpart$log$clone(deep = TRUE)  # FIXME: this can go when mlr-org/mlr3#343 is fixed
+  # glrn2_clone$state$log = glrn2_clone$state$log$clone(deep = TRUE)  # FIXME: this can go when mlr-org/mlr3#343 is fixed
+  # glrn2_clone$state$model$classif.rpart$log = glrn2_clone$state$model$classif.rpart$log$clone(deep = TRUE)  # FIXME: this can go when mlr-org/mlr3#343 is fixed
   expect_deep_clone(glrn2_clone, glrn2$clone(deep = TRUE))
   expect_prediction_classif({
     graphpred2 = glrn2$predict(task)
   })
+  expect_list(glrn2$timings_pipeops, len = 2L)
+  expect_equal(names(glrn2$timings_pipeops), c("train", "predict"))
+  expect_equal(names(glrn2$timings_pipeops$train), glrn2$graph$ids(TRUE))
+  expect_equal(names(glrn2$timings_pipeops$train), names(glrn2$timings_pipeops$predict))
+  expect_true(every(is.na(glrn2$timings_pipeops$train), isFALSE))
+  expect_true(every(is.na(glrn2$timings_pipeops$predict), isFALSE))
 
   expect_equal(glrn2$predict(task), glrn2_clone$predict(task))
+
+  glrn2$graph$set_names(c("newscale", "newclassif.rpart"), new = c("NEWscale", "NEWclassif.rpart"))
+  expect_equal(names(glrn2$timings_pipeops$train), glrn2$graph$ids(TRUE))
+  expect_equal(names(glrn2$timings_pipeops$train), names(glrn2$timings_pipeops$predict))
 
   scidf = cbind(scale(iris[1:4]), iris[5])
   scalediris = TaskClassif$new("scalediris", as_data_backend(scidf), "Species")

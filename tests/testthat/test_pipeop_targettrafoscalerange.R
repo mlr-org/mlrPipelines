@@ -15,7 +15,7 @@ test_that("PipeOpTargetTrafoScaleRange - basic properties", {
   b = 1 / (rng[2L] - rng[1L])
   a = -rng[1L] * b
   expect_equal(train_out1[[2L]]$data(cols = "medv.scaled")[[1L]], a + x * b)
-  expect_equal(po$state, list(scale = b, offset = a))
+  expect_equal(po$state[c("scale", "offset")], list(scale = b, offset = a))
 
   predict_out1 = po$predict(list(task))
 
@@ -24,7 +24,7 @@ test_that("PipeOpTargetTrafoScaleRange - basic properties", {
   state = po$state
   task$row_roles$use = 1:506
   predict_out2 = po$predict(list(task))
-  expect_equal(state, po$state)
+  expect_equal(state[c("scale", "offset")], po$state[c("scale", "offset")])
 
   g = Graph$new()
   g$add_pipeop(po)

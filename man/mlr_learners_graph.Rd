@@ -19,6 +19,9 @@ The \code{predict_type} of a \code{\link{GraphLearner}} can be obtained or set v
 Setting a new predict type will try to set the \code{predict_type} in all relevant
 \code{\link{PipeOp}} / \code{\link[mlr3:Learner]{Learner}} encapsulated within the \code{\link{Graph}}.
 Similarly, the predict_type of a Graph will always be the smallest denominator in the \code{\link{Graph}}.
+
+In the \code{timings_pipeops} active binding, the \code{timings} of the individual \code{\link{PipeOp}}s are stored as a named list
+with names \code{"train"} and \code{"predict"}.
 }
 \seealso{
 Other Learners: 

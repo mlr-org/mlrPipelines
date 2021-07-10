@@ -452,7 +452,7 @@ Graph = R6Class("Graph",
     state = function(val) {
       if (!missing(val)) {
         assert_list(val, names = "unique", null.ok = TRUE)
-        assert_subset(names(val), names(self$pipeops))
+        assert_subset(names(val), c(names(self$pipeops), "log", "train_time", "predict_time"))
         imap(self$pipeops, function(pipeop, pname) pipeop$state = val[[pname]])
         val
       } else {

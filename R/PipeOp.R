@@ -59,8 +59,8 @@
 #'   Set of all required packages for the [`PipeOp`]'s `$train` and `$predict` methods. See `$packages` slot.
 #'   Default is `character(0)`.
 #' * `tags` ::`character`\cr
-#'   A set of tags associated with the `PipeOp`. Tags describe a PipeOp's purpose.
-#'   Can be used to filter `as.data.table(mlr_pipeops)`. Default is `"abstract"`, indicating an abstract `PipeOp`.
+#'   A set of tags associated with the [`PipeOp`]. Tags describe a [`PipeOp`]'s purpose.
+#'   Can be used to filter `as.data.table(mlr_pipeops)`. Default is `"abstract"`, indicating an abstract [`PipeOp`].
 #'
 #' @section Internals:
 #' [`PipeOp`] is an abstract class with abstract functions `private$.train()` and `private$.predict()`. To create a functional
@@ -111,14 +111,29 @@
 #'   Number of output channels. This equals `nrow($output)`.
 #' * `is_trained` :: `logical(1)` \cr
 #'   Indicate whether the [`PipeOp`] was already trained and can therefore be used for prediction.
-#' * `tags` ::`character`\cr
-#'   A set of tags associated with the `PipeOp`. Tags describe a PipeOp's purpose.
+#' * `tags` :: `character`\cr
+#'   A set of tags associated with the [`PipeOp`]. Tags describe a [`PipeOp`]'s purpose.
 #'   Can be used to filter `as.data.table(mlr_pipeops)`.
-#'   PipeOp tags are inherited and child classes can introduce additional tags.
+#'   [`PipeOp`] tags are inherited and child classes can introduce additional tags.
 #' * `hash` :: `character(1)` \cr
 #'   Checksum calculated on the [`PipeOp`], depending on the [`PipeOp`]'s `class` and the slots `$id` and `$param_set$values`. If a
 #'   [`PipeOp`]'s functionality may change depending on more than these values, it should inherit the `$hash` active
 #'   binding and calculate the hash as `digest(list(super$hash, <OTHER THINGS>), algo = "xxhash64")`.
+#' * `timings` :: `numeric(2)` \cr
+#'   Elapsed time in seconds for the steps `"train"` and `"predict"`.
+#'   Measured via [mlr3misc::encapsulate()].
+#' * `log` :: [`data.table`]\cr
+#'   Returns the output (including warning and errors) as table with columns `"stage"` ("train" or "predict"),
+#'   `"class"` ("output", "warning", or "error"), and `"msg"` (`character()`).
+#' * `warnings` :: `character()`\cr
+#'   Logged warnings as vector.
+#' * `errors` :: `character()`\cr
+#'   Logged errors as vector.
+#' * `encapsulate` :: named `character()`\cr
+#'   Controls how to execute the code in internal train and predict methods.
+#'   Must be a named character vector with names `"train"` and `"predict"`.
+#'   Possible values are `"none"`, `"evaluate"` (requires package \CRANpkg{evaluate}) and `"callr"` (requires package \CRANpkg{callr}).
+#'   See [mlr3misc::encapsulate()] for more details.
 #' * `.result` :: `list` \cr
 #'   If the [`Graph`]'s `$keep_results` flag is set to `TRUE`, then the intermediate Results of `$train()` and `$predict()`
 #'   are saved to this slot, exactly as they are returned by these functions. This is mainly for debugging purposes
@@ -127,7 +142,7 @@
 #' @section Methods:
 #' * `train(input)`\cr
 #'   (`list`) -> named `list`\cr
-#'   Train [`PipeOp`] on `inputs`, transform it to output and store the learned `$state`. If the PipeOp is already
+#'   Train [`PipeOp`] on `inputs`, transform it to output and store the learned `$state`. If the [`PipeOp`] is already
 #'   trained, already present `$state` is overwritten. Input list is typechecked against the `$input` `train` column.
 #'   Return value is a list with as many entries as `$output` has
 #'   rows, with each entry named after the `$output` `name` column and class according to the `$output` `train` column.
@@ -177,11 +192,11 @@
 #'     # a list as output.
 #'     .train = function(input) {
 #'       sum = input[[1]] + input[[2]]
-#'       self$state = sum
+#'       self$state$sum = sum
 #'       list(sum)
 #'     },
 #'     .predict = function(input) {
-#'       list(letters[self$state])
+#'       list(letters[self$state$sum])
 #'     }
 #'   )
 #' )
@@ -223,6 +238,7 @@ PipeOp = R6Class("PipeOp",
       self$output = assert_connection_table(output)
       self$packages = assert_character(packages, any.missing = FALSE, unique = TRUE)
       self$tags = assert_subset(tags, mlr_reflections$pipeops$valid_tags)
+      private$.encapsulate = private$.learner$encapsulate %??% c(train = "none", predict = "none")  # propagate a learner's encapsulate in case of as_pipeop.Learner calls etc.
     },
 
     print = function(...) {
@@ -242,42 +258,10 @@ PipeOp = R6Class("PipeOp",
     },
 
     train = function(input) {
-      self$state = NULL  # reset to untrained state first
-      require_namespaces(self$packages)
-
-      if (every(input, is_noop)) {
-        self$state = NO_OP
-        return(named_list(self$output$name, NO_OP))
-      }
-      unpacked = unpack_multiplicities(input, multiplicity_type_nesting_level(self$input$train), self$input$name, self$id)
-      if (!is.null(unpacked)) {
-        return(evaluate_multiplicities(self, unpacked, "train", NULL))
-      }
-      input = check_types(self, input, "input", "train")
-      on.exit({self$state = NULL})  # if any of the followi fails, make sure to reset self$state
-      output = private$.train(input)
-      output = check_types(self, output, "output", "train")
-      on.exit()  # don't reset state any more
-      output
+      pipeop_train(self, input)
     },
     predict = function(input) {
-      # need to load packages in train *and* predict, because they might run in different R instances
-      require_namespaces(self$packages)
-
-      if (every(input, is_noop)) {
-        return(named_list(self$output$name, NO_OP))
-      }
-      if (is_noop(self$state)) {
-        stopf("Pipeop %s got NO_OP during train but no NO_OP during predict.", self$id)
-      }
-      unpacked = unpack_multiplicities(input, multiplicity_type_nesting_level(self$input$predict), self$input$name, self$id)
-      if (!is.null(unpacked)) {
-        return(evaluate_multiplicities(self, unpacked, "predict", self$state))
-      }
-      input = check_types(self, input, "input", "predict")
-      output = private$.predict(input)
-      output = check_types(self, output, "output", "predict")
-      output
+      pipeop_predict(self, input)
     }
   ),
 
@@ -334,6 +318,30 @@ PipeOp = R6Class("PipeOp",
           val
         }
       })), algo = "xxhash64")
+    },
+    timings = function(rhs) {
+      assert_ro_binding(rhs)
+      set_names(c(self$state$train_time %??% NA_real_, self$state$predict_time %??% NA_real_), c("train", "predict"))
+    },
+    log = function(rhs) {
+      assert_ro_binding(rhs)
+      self$state$log
+    },
+    warnings = function(rhs) {
+      assert_ro_binding(rhs)
+      get_log_condition(self$state, "warning")
+    },
+    errors = function(rhs) {
+      assert_ro_binding(rhs)
+      get_log_condition(self$state, "error")
+    },
+    encapsulate = function(rhs) {
+      if (missing(rhs)) {
+        return(private$.encapsulate)
+      }
+      assert_character(rhs)
+      assert_names(names(rhs), subset.of = c("train", "predict"))
+      private$.encapsulate = insert_named(c(train = "none", predict = "none"), rhs)
     }
   ),
 
@@ -356,7 +364,8 @@ PipeOp = R6Class("PipeOp",
     .predict = function(input) stop("abstract"),
     .param_set = NULL,
     .param_set_source = NULL,
-    .id = NULL
+    .id = NULL,
+    .encapsulate = NULL
   )
 )
 
@@ -498,3 +507,117 @@ evaluate_multiplicities = function(self, unpacked, evalcall, instate) {
 
   map(transpose_list(map(result, "output")), as.Multiplicity)
 }
+
+pipeop_train = function(pipeop, input) {
+  # This wrapper calls pipeop$train, and additionally performs some basic checks that the training was successful.
+  # Exceptions here are possibly encapsulated, so that they get captured and turned into log messages.
+  train_wrapper = function(pipeop, input) {
+    output = get_private(pipeop)$.train(input)
+
+    if (is.null(output)) {
+      stopf("PipeOp '%s' on input '%s' returned NULL during internal train()", pipeop$id, deparse(substitute(input)))
+    }
+
+    output
+  }
+
+  pipeop$state = NULL  # reset to untrained state first
+  #require_namespaces(pipeop$packages)
+
+  if (every(input, is_noop)) {
+    pipeop$state = NO_OP
+    return(named_list(pipeop$output$name, NO_OP))
+  }
+
+  unpacked = unpack_multiplicities(input, multiplicity_type_nesting_level(pipeop$input$train), pipeop$input$name, pipeop$id)
+  if (!is.null(unpacked)) {
+    return(evaluate_multiplicities(pipeop, unpacked, "train", NULL))
+  }
+
+  input = check_types(pipeop, input, "input", "train")
+  on.exit({pipeop$state = NULL})  # if any of the following fails, make sure to reset pipeop$state
+
+  lg$debug("Calling train method of PipeOp '%s' on input '%s'",
+    pipeop$id, deparse(substitute(input)), pipeop = pipeop$clone())
+
+  # call train_wrapper with encapsulation
+  result = encapsulate(pipeop$encapsulate["train"],
+    .f = train_wrapper,
+    .args = list(pipeop = pipeop, input = input),
+    .pkgs = pipeop$packages,
+    .seed = NA_integer_
+  )
+
+  output = check_types(pipeop, result$result, "output", "train")
+  on.exit()  # don't reset state any more
+
+  pipeop$state$log = append_log(pipeop$state$log, "train", result$log$class, result$log$msg)
+  pipeop$state$train_time = result$elapsed
+
+  if (is.null(output)) {
+    lg$debug("PipeOp '%s' on input '%s' failed to return a state",
+      pipeop$id, deparse(substitute(input)), pipeop = pipeop$clone(), messages = result$log$msg)
+  } else {
+    lg$debug("PipeOp '%s' on input '%s' succeeded to return a state",
+      pipeop$id, deparse(substitute(input)), pipeop = pipeop$clone(), messages = result$log$msg)
+  }
+
+  output
+}
+
+pipeop_predict = function(pipeop, input) {
+  # This wrapper calls pipeop$predict, and additionally performs some basic checks that the prediction was successful.
+  # Exceptions here are possibly encapsulated, so that they get captured and turned into log messages.
+  predict_wrapper = function(pipeop, input) {
+    # NOTE: may actually be sensible to check this
+    #if (is.null(pipeop$state)) {
+    #  stopf("No trained state available for PipeOp '%s' on input '%s'", pipeop$id, deparse(substitute(input)))
+    #}
+
+    get_private(pipeop)$.predict(input)
+  }
+
+  # need to load packages in train *and* predict, because they might run in different R instances
+  #require_namespaces(pipeop$packages)
+
+  if (every(input, is_noop)) {
+    return(named_list(pipeop$output$name, NO_OP))
+  }
+
+  if (is_noop(pipeop$state)) {
+    stopf("Pipeop %s got NO_OP during train but no NO_OP during predict.", pipeop$id)
+  }
+
+  unpacked = unpack_multiplicities(input, multiplicity_type_nesting_level(pipeop$input$predict), pipeop$input$name, pipeop$id)
+  if (!is.null(unpacked)) {
+    return(evaluate_multiplicities(pipeop, unpacked, "predict", pipeop$state))
+  }
+
+  input = check_types(pipeop, input, "input", "predict")
+
+  # call predict with encapsulation
+  lg$debug("Calling predict method of PipeOp '%s' on input '%s'",
+    pipeop$id, deparse(substitute(input)), pipeop = pipeop$clone())
+
+  result = encapsulate(
+    pipeop$encapsulate["predict"],
+    .f = predict_wrapper,
+    .args = list(pipeop = pipeop, input = input),
+    .pkgs = pipeop$packages,
+    .seed = NA_integer_
+  )
+
+  output = check_types(pipeop, result$result, "output", "predict")
+
+  pipeop$state$log = append_log(pipeop$state$log, "predict", result$log$class, result$log$msg)
+  pipeop$state$predict_time = result$elapsed
+
+  output
+}
+
+#FIXME: need this from mlr3
+assert_ro_binding = mlr3:::assert_ro_binding
+get_private = mlr3:::get_private
+append_log = mlr3:::append_log
+get_log_condition = mlr3:::get_log_condition
+

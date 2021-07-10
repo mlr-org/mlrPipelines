@@ -92,13 +92,15 @@ test_that("PipeOp - evaluate_multiplicities", {
   po = PipeOpTestMultiplicites$new(2)
   expect_null(po$state)
 
-  po$param_set$values$state = "trained"
+  po$param_set$values$state = list("trained")
   train_out1 = po$train(as.Multiplicity(list(0, as.Multiplicity(0))))
-  expect_multiplicity(train_out1[[1]])
-  expect_equal(po$state, as.Multiplicity(list("trained")))
+  expect_multiplicity(train_out1[[1L]])
+  expect_equal(po$state[[1L]][[1L]], "trained")
+  expect_setequal(names(po$state[[1L]]), c("", "log", "train_time"))
   predict_out1 = po$predict(as.Multiplicity(list(0, as.Multiplicity(0))))
-  expect_equal(po$state, as.Multiplicity(list("trained")))
-  expect_multiplicity(predict_out1[[1]])
+  expect_equal(po$state[[1L]][[1L]], "trained")
+  expect_setequal(names(po$state[[1L]]), c("", "log", "train_time", "predict_time"))
+  expect_multiplicity(predict_out1[[1L]])
 
   po$state = list("no_multiplicties")
   expect_error(po$predict(as.Multiplicity(list(0, as.Multiplicity(0)))), regexp = "state was not a multiplicity")
@@ -108,11 +110,11 @@ test_that("PipeOp - evaluate_multiplicities", {
   expect_error(po$predict(as.Multiplicity(list(0, as.Multiplicity(0)))), regexp = "state had different length / names than input")
   expect_equal(po$state, as.Multiplicity(NULL))
 
-  po$param_set$values$state = "trained"
+  po$param_set$values$state = list("trained")
   train_out2 = po$train(as.Multiplicity(list(0, as.Multiplicity(0))))
   expect_multiplicity(train_out2[[1]])
   old_state = po$state
-  po$param_set$values$state = "error"
+  po$param_set$values$state = list("error")
   expect_error(po$train(as.Multiplicity(list(0, as.Multiplicity(0)))), regexp = "Error")
   expect_equal(po$state, NULL)  # state is completely reset to NULL
 })

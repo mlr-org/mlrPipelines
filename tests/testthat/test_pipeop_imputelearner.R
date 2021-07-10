@@ -150,7 +150,7 @@ test_that("PipeOpImputeLearner - model active binding to state", {
 
   # after predicting state is unchanged and models still are equivalent
   predict_out = po$predict(list(task))
-  expect_equal(po$state, train_state)
+  expect_equal(po$state[-which(names(po$state) == "predict_time")], train_state)
   expect_null(po$learner$state)
   expect_equal(names(models), names(po$learner_models))
   expect_true(all(pmap_lgl(list(map(models, .f = "model"), map(po$learner_models, .f = "model")), .f = all.equal)))

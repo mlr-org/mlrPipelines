@@ -15,6 +15,9 @@
 #' Setting a new predict type will try to set the `predict_type` in all relevant
 #' [`PipeOp`] / [`Learner`][mlr3::Learner] encapsulated within the [`Graph`].
 #' Similarly, the predict_type of a Graph will always be the smallest denominator in the [`Graph`].
+#'
+#' In the `timings_pipeops` active binding, the `timings` of the individual [`PipeOp`]s are stored as a named list
+#' with names `"train"` and `"predict"`.
 #' @family Learners
 #' @export
 GraphLearner = R6Class("GraphLearner", inherit = Learner,
@@ -23,6 +26,12 @@ GraphLearner = R6Class("GraphLearner", inherit = Learner,
     initialize = function(graph, id = NULL, param_vals = list(), task_type = NULL, predict_type = NULL) {
 
       graph = as_graph(graph, clone = TRUE)
+
+      # set the encapsulate of all pipeops to "none"
+      for (i in seq_along(graph$pipeops)) {
+        graph$pipeops[[i]]$encapsulate = c(train = "none", predict = "none")
+      }
+
       id = assert_string(id, null.ok = TRUE) %??% paste(graph$ids(sorted = TRUE), collapse = ".")
       self$graph = graph
       output = graph$output
@@ -46,7 +55,6 @@ GraphLearner = R6Class("GraphLearner", inherit = Learner,
         }
         if (length(task_type) == 0L) {
           # recursively walk backwards through the graph
-          # FIXME: think more about target transformation graphs here
           get_po_task_type = function(x) {
             task_type = c(
               match(c(x$output$train, x$output$predict), class_table$prediction),
@@ -101,11 +109,21 @@ GraphLearner = R6Class("GraphLearner", inherit = Learner,
         stop("param_set is read-only.")
       }
       self$graph$param_set
+    },
+    timings_pipeops = function(rhs) {
+      assert_ro_binding(rhs)
+      if (is.null(self$state$model)) {
+        timing = stats::setNames(rep(NA_real_, length(self$graph$pipeops)), nm = names(self$graph$pipeops))
+        return(list(train = timing, predict = timing))  # early exit
+      }
+      # reorder based on topologically sorted ids
+      list(train = stats::setNames(map_dbl(self$state$model, function(pipeop) pipeop$train_time %??% NA_real_), nm = names(self$graph$pipeops))[self$graph$ids(TRUE)],
+        predict = stats::setNames(map_dbl(self$state$model, function(pipeop) pipeop$predict_time %??% NA_real_), nm = names(self$graph$pipeops))[self$graph$ids(TRUE)])
     }
   ),
   private = list(
     deep_clone = function(name, value) {
-      # FIXME this repairs the mlr3::Learner deep_clone() method which is broken.
+      # FIXME: this repairs the mlr3::Learner deep_clone() method which is broken.
       if (is.environment(value) && !is.null(value[[".__enclos_env__"]])) {
         return(value$clone(deep = TRUE))
       }
@@ -122,6 +140,7 @@ GraphLearner = R6Class("GraphLearner", inherit = Learner,
       on.exit({self$graph$state = NULL})
       self$graph$state = self$model
       prediction = self$graph$predict(task)
+      self$state$model = self$graph$state  # needed to get each pipeop's predict_time in the state
       assert_list(prediction, types = "Prediction", len = 1,
         .var.name = sprintf("Prediction returned by Graph %s", self$id))
       prediction[[1]]

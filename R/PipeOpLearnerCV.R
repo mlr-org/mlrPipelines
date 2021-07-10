@@ -208,4 +208,7 @@ PipeOpLearnerCV = R6Class("PipeOpLearnerCV",
   )
 )
 
-mlr_pipeops$add("learner_cv", PipeOpLearnerCV, list(R6Class("Learner", public = list(id = "learner_cv", task_type = "classif", param_set = ParamSet$new()))$new()))
+mlr_pipeops$add("learner_cv", PipeOpLearnerCV,
+  list(R6Class("Learner",
+    public = list(id = "learnercv", task_type = "classif", param_set = ParamSet$new()),
+    active = list(encapsulate = function() c(train = "none", predict = "none")))$new()))

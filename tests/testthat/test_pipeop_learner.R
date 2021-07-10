@@ -70,7 +70,7 @@ test_that("PipeOpLearner - model active binding to state", {
 
   # after predicting states are unchanged
   predict_out = po$predict(list(task))
-  expect_equal(po$state, train_state)
+  expect_equal(po$state[-which(names(po$state) == "predict_time")], train_state)
   expect_null(po$learner$state)
   expect_equal(po$learner_model$state, po$state)
 })
