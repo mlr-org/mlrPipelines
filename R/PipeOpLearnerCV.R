@@ -191,7 +191,7 @@ PipeOpLearnerCV = R6Class("PipeOpLearnerCV",
 
     pred_to_task = function(prds, task) {
       if (!is.null(prds$truth)) prds[, truth := NULL]
-      if (!self$param_set$values$resampling.keep_response && self$learner$predict_type == "prob") {
+      if (!self$param_set$values$resampling.keep_response && self$learner$predict_type %in% c("impact", "prob")) {
         prds[, response := NULL]
       }
       renaming = setdiff(colnames(prds), c("row_id", "row_ids"))
